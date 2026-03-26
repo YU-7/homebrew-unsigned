@@ -28,8 +28,10 @@ cask "snow-shot" do
   end
 
   zap trash: [
-    "~/Library/Application Support/Snow Shot",
-    "~/Library/Preferences/com.snow-shot.plist",
-    "~/Library/Caches/com.snow-shot",
+    "~/Library/Application Support/com.chao.showshot",
+    "~/Library/Caches/com.chao.snowshot",
+    "~/Library/Logs/com.chao.snowshot",
+    "~/Library/Preferences/com.chao.snowshot.plist",
+    "~/Library/WebKit/com.chao.snowshot",
   ]
 end

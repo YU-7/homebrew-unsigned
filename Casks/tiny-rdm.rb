@@ -27,8 +27,9 @@ cask "tiny-rdm" do
   end
 
   zap trash: [
-    "~/Library/Application Support/Tiny RDM",
-    "~/Library/Preferences/com.tiny-craft.tiny-rdm.plist",
-    "~/Library/Caches/com.tiny-craft.tiny-rdm",
+   "~/Library/Caches/com.tinycraft.tinyrdm",
+   "~/Library/Preferences/TinyRDM",
+   "~/Library/Preferences/com.tinycraft.tinyrdm.plist",
+   "~/Library/WebKit/com.tinycraft.tinyrdm"
   ]
 end

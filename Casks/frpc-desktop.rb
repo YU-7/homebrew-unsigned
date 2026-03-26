@@ -26,8 +26,8 @@ cask "frpc-desktop" do
   end
 
   zap trash: [
-    "~/Library/Application Support/frpc-desktop",
-    "~/Library/Preferences/com.frpc-desktop.plist",
-    "~/Library/Caches/com.frpc-desktop",
+    "~/Library/Application Support/Frpc-Desktop",
+    "~/Library/Logs/Frpc-Desktop",
+    "~/Library/Preferences/priv.liujiawei.frpc.desktop.plist",
   ]
 end
