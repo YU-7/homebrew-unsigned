@@ -11,9 +11,8 @@ cask "tiny-rdm" do
   homepage "https://github.com/tiny-craft/tiny-rdm"
 
   livecheck do
-    url "https://github.com/tiny-craft/tiny-rdm/releases/latest"
-    strategy :page_match
-    regex(%r{tag/v?(\d+\.\d+\.\d+)}i)
+    url :homepage
+    strategy :github_latest
   end
 
   auto_updates true

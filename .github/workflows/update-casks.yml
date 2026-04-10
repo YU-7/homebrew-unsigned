@@ -1,0 +1,105 @@
+name: Update Casks
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-casks:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Homebrew tap
+        run: |
+          brew tap ${{ github.repository }} "${{ github.workspace }}"
+
+      - name: Run update script
+        id: update
+        run: |
+          UPDATED=()
+          for CASK in Casks/*.rb; do
+            CASK_NAME=$(basename "$CASK" .rb)
+            echo "Checking $CASK_NAME..."
+
+            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>/dev/null || true)
+            if echo "$LIVECHECK" | grep -q "==> $CASK_NAME"; then
+              NEW_VERSION=$(echo "$LIVECHECK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-beta)?' | tail -1)
+              CURRENT_VERSION=$(grep '^  version "' "$CASK" | cut -d'"' -f2)
+
+              if [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+                echo "Updating $CASK_NAME: $CURRENT_VERSION -> $NEW_VERSION"
+
+                sed -i.bak "s/version \"$CURRENT_VERSION\"/version \"$NEW_VERSION\"/" "$CASK"
+                rm -f "$CASK.bak"
+
+                URL_TEMPLATE=$(grep '^  url "' "$CASK" | cut -d'"' -f2)
+
+                ARCHES=()
+                if grep -q 'arch arm' "$CASK"; then
+                  ARM_ARCH=$(grep 'arch arm' "$CASK" | cut -d'"' -f2)
+                  INTEL_ARCH=$(grep 'intel' "$CASK" | cut -d'"' -f2)
+                  ARCHES+=("$ARM_ARCH" "$INTEL_ARCH")
+                else
+                  ARCHES+=("universal")
+                fi
+
+                for ARCH in "${ARCHES[@]}"; do
+                  if [ "$ARCH" = "universal" ]; then
+                    DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$NEW_VERSION/g")
+                  else
+                    DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$NEW_VERSION/g; s/#{arch}/$ARCH/g")
+                  fi
+
+                  TEMP_FILE="/tmp/$CASK_NAME-$ARCH.dmg"
+                  echo "Downloading $DOWNLOAD_URL"
+                  curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --connect-timeout 30 --max-time 120 2>/dev/null || continue
+
+                  if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+                    SHA256=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
+                    echo "SHA256 ($ARCH): $SHA256"
+
+                    if [ "$ARCH" = "$ARM_ARCH" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+                      sed -i.bak "/sha256 arm:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                    elif [ "$ARCH" = "$INTEL_ARCH" ] || [ "$ARCH" = "x64" ]; then
+                      sed -i.bak "/sha256.*intel:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                    else
+                      sed -i.bak "/sha256 /s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                    fi
+                    rm -f "$CASK.bak"
+                  fi
+                  rm -f "$TEMP_FILE"
+                done
+
+                UPDATED+=("$CASK_NAME $CURRENT_VERSION -> $NEW_VERSION")
+              fi
+            fi
+          done
+
+          if [ ${#UPDATED[@]} -gt 0 ]; then
+            printf -v UPDATED_STR '%s\n' "${UPDATED[@]}"
+            echo "updated<<EOF" >> $GITHUB_OUTPUT
+            echo "$UPDATED_STR" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create pull request
+        if: steps.update.outputs.updated
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update casks"
+          title: "Update Casks"
+          body: |
+            Automated cask updates:
+
+            ```
+            ${{ steps.update.outputs.updated }}
+            ```
+          branch: auto-update-casks
+          delete-branch: true

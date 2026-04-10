@@ -12,9 +12,8 @@ cask "snow-shot" do
   homepage "https://github.com/mg-chao/snow-shot"
 
   livecheck do
-    url "https://github.com/mg-chao/snow-shot/releases/latest"
-    strategy :page_match
-    regex(%r{tag/v?(\d+\.\d+\.\d+-beta)}i)
+    url :homepage
+    strategy :github_latest
   end
 
   auto_updates true

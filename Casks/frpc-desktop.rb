@@ -10,9 +10,8 @@ cask "frpc-desktop" do
   homepage "https://github.com/luckjiawei/frpc-desktop"
 
   livecheck do
-    url "https://github.com/luckjiawei/frpc-desktop/releases/latest"
-    strategy :page_match
-    regex(%r{tag/v?(\d+\.\d+\.\d+)}i)
+    url :homepage
+    strategy :github_latest
   end
 
   auto_updates true
