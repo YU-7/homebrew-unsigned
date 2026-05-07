@@ -9,13 +9,15 @@ A Homebrew tap containing custom casks for macOS applications.
 ### Homebrew (macOS)
 
 ```bash
-brew tap YU-7/ununsigned
+brew tap yu-7/unsigned
 ```
 
 The app will be automatically configured to run without security warnings.
 
 ## Test in local
 
-```
+```bash
+# when you add new casks, you need to update the tap first.
+brew update
 ```
 

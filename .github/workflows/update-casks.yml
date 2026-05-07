@@ -27,8 +27,8 @@ jobs:
             CASK_NAME=$(basename "$CASK" .rb)
             echo "Checking $CASK_NAME..."
 
-            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>/dev/null || true)
-            if echo "$LIVECHECK" | grep -q "==> $CASK_NAME"; then
+            LIVECHECK=$(brew livecheck --cask "${{ github.repository }}/$CASK_NAME" 2>/dev/null || true)
+            if echo "$LIVECHECK" | grep -q "==>"; then
               NEW_VERSION=$(echo "$LIVECHECK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-beta)?' | tail -1)
               CURRENT_VERSION=$(grep '^  version "' "$CASK" | cut -d'"' -f2)
 
