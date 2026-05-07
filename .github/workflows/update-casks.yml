@@ -49,6 +49,7 @@ jobs:
                   ARCHES+=("universal")
                 fi
 
+                DOWNLOAD_SUCCESS=false
                 for ARCH in "${ARCHES[@]}"; do
                   if [ "$ARCH" = "universal" ]; then
                     DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$NEW_VERSION/g")
@@ -58,25 +59,35 @@ jobs:
 
                   TEMP_FILE="/tmp/$CASK_NAME-$ARCH.dmg"
                   echo "Downloading $DOWNLOAD_URL"
-                  curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --connect-timeout 30 --max-time 120 2>/dev/null || continue
+                  if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --connect-timeout 30 --max-time 120 --fail --silent --show-error; then
+                    if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+                      SHA256=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
+                      echo "SHA256 ($ARCH): $SHA256"
 
-                  if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
-                    SHA256=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
-                    echo "SHA256 ($ARCH): $SHA256"
-
-                    if [ "$ARCH" = "$ARM_ARCH" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-                      sed -i.bak "/sha256 arm:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
-                    elif [ "$ARCH" = "$INTEL_ARCH" ] || [ "$ARCH" = "x64" ]; then
-                      sed -i.bak "/sha256.*intel:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                      if [ "$ARCH" = "$ARM_ARCH" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+                        sed -i.bak "/sha256 arm:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                      elif [ "$ARCH" = "$INTEL_ARCH" ] || [ "$ARCH" = "x64" ]; then
+                        sed -i.bak "/sha256.*intel:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                      else
+                        sed -i.bak "/sha256 /s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                      fi
+                      rm -f "$CASK.bak"
+                      DOWNLOAD_SUCCESS=true
                     else
-                      sed -i.bak "/sha256 /s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                      echo "Error: Downloaded file is empty for $CASK_NAME ($ARCH)"
                     fi
-                    rm -f "$CASK.bak"
+                  else
+                    echo "Error: Failed to download $CASK_NAME ($ARCH) from $DOWNLOAD_URL"
                   fi
                   rm -f "$TEMP_FILE"
                 done
 
-                UPDATED+=("$CASK_NAME $CURRENT_VERSION -> $NEW_VERSION")
+                if [ "$DOWNLOAD_SUCCESS" = true ]; then
+                  UPDATED+=("$CASK_NAME $CURRENT_VERSION -> $NEW_VERSION")
+                else
+                  echo "Skipping $CASK_NAME: No successful downloads"
+                  git checkout "$CASK"
+                fi
               fi
             fi
           done
