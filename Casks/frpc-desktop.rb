@@ -1,9 +1,9 @@
 cask "frpc-desktop" do
   arch arm: "arm64"
 
-  version "1.2.5"
-  sha256 arm:   "b1f424214cfaac96c4c961d94eab362ea72038fb70d6d6ce2040f5bc232a513c"
-         
+  version "1.2.6"
+  sha256 arm:   "7a16a3538a7b9a60df8cfd000608459795410f3c4ef0dae078d5b7dbbcc31054"
+
   url "https://github.com/luckjiawei/frpc-desktop/releases/download/v#{version}/frpc-desktop-#{version}-#{arch}.dmg"
   name "frpc Desktop"
   desc "GUI client for frp (fast reverse proxy)"

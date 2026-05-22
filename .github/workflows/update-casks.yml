@@ -21,77 +21,108 @@ jobs:
 
       - name: Run update script
         id: update
+        shell: bash
         run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
           UPDATED=()
           for CASK in Casks/*.rb; do
             CASK_NAME=$(basename "$CASK" .rb)
-            echo "Checking $CASK_NAME..."
+            echo "--- Checking $CASK_NAME ---"
 
-            LIVECHECK=$(brew livecheck --cask "${{ github.repository }}/$CASK_NAME" 2>/dev/null || true)
-            if echo "$LIVECHECK" | grep -q "==>"; then
-              NEW_VERSION=$(echo "$LIVECHECK" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-beta)?' | tail -1)
-              CURRENT_VERSION=$(grep '^  version "' "$CASK" | cut -d'"' -f2)
+            # Get current version from cask file
+            CURRENT_VERSION=$(grep -E '^[[:space:]]*version "' "$CASK" | head -1 | sed 's/.*version "\(.*\)".*/\1/')
+            echo "Current version: $CURRENT_VERSION"
 
-              if [ -n "$NEW_VERSION" ] && [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
-                echo "Updating $CASK_NAME: $CURRENT_VERSION -> $NEW_VERSION"
+            # Run brew livecheck against the local tap cask
+            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>/dev/null || true)
+            echo "Livecheck: $LIVECHECK"
 
-                sed -i.bak "s/version \"$CURRENT_VERSION\"/version \"$NEW_VERSION\"/" "$CASK"
-                rm -f "$CASK.bak"
+            # Extract new version: take everything after "==>" and get the first word
+            if ! echo "$LIVECHECK" | grep -q "==>"; then
+              echo "No update info for $CASK_NAME, skipping"
+              continue
+            fi
+            NEW_VERSION=$(echo "$LIVECHECK" | sed 's/.*==>[[:space:]]*//' | awk '{print $1}')
 
-                URL_TEMPLATE=$(grep '^  url "' "$CASK" | cut -d'"' -f2)
+            if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$CURRENT_VERSION" ]; then
+              echo "No update needed for $CASK_NAME"
+              continue
+            fi
 
-                ARCHES=()
-                if grep -q 'arch arm' "$CASK"; then
-                  ARM_ARCH=$(grep 'arch arm' "$CASK" | cut -d'"' -f2)
-                  INTEL_ARCH=$(grep 'intel' "$CASK" | cut -d'"' -f2)
-                  ARCHES+=("$ARM_ARCH" "$INTEL_ARCH")
+            echo "Updating $CASK_NAME: $CURRENT_VERSION -> $NEW_VERSION"
+
+            # Safely escape version strings for sed (escape /, \, &)
+            ESCAPED_CURRENT=$(echo "$CURRENT_VERSION" | sed 's/[/\&]/\\&/g')
+            ESCAPED_NEW=$(echo "$NEW_VERSION" | sed 's/[/\&]/\\&/g')
+
+            # Update version in cask file
+            sed -i.bak "s/version \"$ESCAPED_CURRENT\"/version \"$ESCAPED_NEW\"/" "$CASK"
+            rm -f "$CASK.bak"
+
+            # Parse arch line to extract arch names and values separately
+            # Only look at the 'arch' line (not sha256 lines)
+            # e.g. arch arm: "arm64", intel: "x64"
+            #      arch arm: "arm64"
+            #      arch arm: "-arm64", intel: ""
+            ARCH_LINE=$(grep -E '^[[:space:]]*arch ' "$CASK" | head -1)
+            echo "Arch line: $ARCH_LINE"
+
+            ARCH_NAMES=()
+            ARCH_VALUES=()
+            if echo "$ARCH_LINE" | grep -qE 'arm:'; then
+              ARM_ARCH=$(echo "$ARCH_LINE" | grep -oE 'arm: "[^"]*"' | sed 's/.*"\(.*\)"/\1/')
+              ARCH_NAMES+=("arm")
+              ARCH_VALUES+=("$ARM_ARCH")
+              echo "ARM arch: '$ARM_ARCH'"
+            fi
+            if echo "$ARCH_LINE" | grep -qE 'intel:'; then
+              INTEL_ARCH=$(echo "$ARCH_LINE" | grep -oE 'intel: "[^"]*"' | sed 's/.*"\(.*\)"/\1/')
+              ARCH_NAMES+=("intel")
+              ARCH_VALUES+=("$INTEL_ARCH")
+              echo "INTEL arch: '$INTEL_ARCH'"
+            fi
+
+            # Get URL template
+            URL_TEMPLATE=$(grep -E '^[[:space:]]*url "' "$CASK" | head -1 | sed 's/.*url "\(.*\)".*/\1/')
+            echo "URL template: $URL_TEMPLATE"
+
+            DOWNLOAD_SUCCESS=false
+            for i in "${!ARCH_NAMES[@]}"; do
+              ARCH_NAME="${ARCH_NAMES[$i]}"
+              ARCH_VAL="${ARCH_VALUES[$i]}"
+
+              # Construct download URL by replacing #{version} and #{arch}
+              DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$ESCAPED_NEW/g; s/#{arch}/$ARCH_VAL/g")
+              echo "Downloading ($ARCH_NAME): $DOWNLOAD_URL"
+
+              TEMP_FILE="/tmp/$CASK_NAME-$ARCH_NAME.dmg"
+              if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --connect-timeout 30 --max-time 120 --fail --silent --show-error; then
+                if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
+                  SHA256=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
+                  echo "SHA256 ($ARCH_NAME): $SHA256"
+
+                  # Update sha256 for this arch name (arm or intel)
+                  sed -i.bak "/sha256 $ARCH_NAME:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
+                  rm -f "$CASK.bak"
+                  DOWNLOAD_SUCCESS=true
                 else
-                  ARCHES+=("universal")
+                  echo "Warning: Downloaded file is empty for $CASK_NAME ($ARCH_NAME)"
                 fi
-
-                DOWNLOAD_SUCCESS=false
-                for ARCH in "${ARCHES[@]}"; do
-                  if [ "$ARCH" = "universal" ]; then
-                    DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$NEW_VERSION/g")
-                  else
-                    DOWNLOAD_URL=$(echo "$URL_TEMPLATE" | sed "s/#{version}/$NEW_VERSION/g; s/#{arch}/$ARCH/g")
-                  fi
-
-                  TEMP_FILE="/tmp/$CASK_NAME-$ARCH.dmg"
-                  echo "Downloading $DOWNLOAD_URL"
-                  if curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL" --connect-timeout 30 --max-time 120 --fail --silent --show-error; then
-                    if [ -f "$TEMP_FILE" ] && [ -s "$TEMP_FILE" ]; then
-                      SHA256=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
-                      echo "SHA256 ($ARCH): $SHA256"
-
-                      if [ "$ARCH" = "$ARM_ARCH" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-                        sed -i.bak "/sha256 arm:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
-                      elif [ "$ARCH" = "$INTEL_ARCH" ] || [ "$ARCH" = "x64" ]; then
-                        sed -i.bak "/sha256.*intel:/s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
-                      else
-                        sed -i.bak "/sha256 /s/\"[^\"]*\"/\"$SHA256\"/" "$CASK"
-                      fi
-                      rm -f "$CASK.bak"
-                      DOWNLOAD_SUCCESS=true
-                    else
-                      echo "Error: Downloaded file is empty for $CASK_NAME ($ARCH)"
-                    fi
-                  else
-                    echo "Error: Failed to download $CASK_NAME ($ARCH) from $DOWNLOAD_URL"
-                  fi
-                  rm -f "$TEMP_FILE"
-                done
-
-                if [ "$DOWNLOAD_SUCCESS" = true ]; then
-                  UPDATED+=("$CASK_NAME $CURRENT_VERSION -> $NEW_VERSION")
-                else
-                  echo "Skipping $CASK_NAME: No successful downloads"
-                  git checkout "$CASK"
-                fi
+              else
+                echo "Warning: Failed to download $CASK_NAME ($ARCH_NAME) from $DOWNLOAD_URL"
               fi
+              rm -f "$TEMP_FILE"
+            done
+
+            if [ "$DOWNLOAD_SUCCESS" = true ]; then
+              UPDATED+=("$CASK_NAME $CURRENT_VERSION -> $NEW_VERSION")
+            else
+              echo "Skipping $CASK_NAME: No successful downloads"
+              git checkout "$CASK"
             fi
           done
 
+          # Output updated casks summary
           if [ ${#UPDATED[@]} -gt 0 ]; then
             printf -v UPDATED_STR '%s\n' "${UPDATED[@]}"
             echo "updated<<EOF" >> $GITHUB_OUTPUT
