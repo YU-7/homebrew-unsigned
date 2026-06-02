@@ -45,11 +45,15 @@ jobs:
             echo "Current version: $CURRENT_VERSION"
 
             # Run brew livecheck against the local tap cask
-            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>&1 || true)
-            echo "Livecheck output: $LIVECHECK"
+            LIVECHECK_STDERR=$(mktemp)
+            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>"$LIVECHECK_STDERR" || true)
+            LIVECHECK_ERR=$(cat "$LIVECHECK_STDERR")
+            rm -f "$LIVECHECK_STDERR"
+            echo "Livecheck stdout: $LIVECHECK"
+            [ -n "$LIVECHECK_ERR" ] && echo "Livecheck stderr: $LIVECHECK_ERR"
 
-            if echo "$LIVECHECK" | grep -qi "error\|rate limit\|unable\|not found"; then
-              echo "Warning: livecheck may have failed for $CASK_NAME"
+            if echo "$LIVECHECK_ERR" | grep -qi "error\|rate limit\|unable\|not found"; then
+              echo "Warning: livecheck may have failed for $CASK_NAME: $LIVECHECK_ERR"
             fi
 
             # Extract new version: take everything after "==>" and get the first word
@@ -57,7 +61,7 @@ jobs:
               echo "No update info for $CASK_NAME, skipping"
               continue
             fi
-            NEW_VERSION=$(echo "$LIVECHECK" | sed 's/.*==>[[:space:]]*//' | awk '{print $1}')
+            NEW_VERSION=$(echo "$LIVECHECK" | grep '==' | sed 's/.*==>[[:space:]]*//' | awk '{print $1}')
 
             if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$CURRENT_VERSION" ]; then
               echo "No update needed for $CASK_NAME"
