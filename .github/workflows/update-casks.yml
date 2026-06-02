@@ -5,14 +5,24 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-casks
+  cancel-in-progress: true
+
 jobs:
   update-casks:
     runs-on: macos-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
-          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Homebrew tap
@@ -24,6 +34,7 @@ jobs:
         shell: bash
         run: |
           export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_GITHUB_API_TOKEN="${{ secrets.GITHUB_TOKEN }}"
           UPDATED=()
           for CASK in Casks/*.rb; do
             CASK_NAME=$(basename "$CASK" .rb)
@@ -34,8 +45,12 @@ jobs:
             echo "Current version: $CURRENT_VERSION"
 
             # Run brew livecheck against the local tap cask
-            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>/dev/null || true)
-            echo "Livecheck: $LIVECHECK"
+            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>&1 || true)
+            echo "Livecheck output: $LIVECHECK"
+
+            if echo "$LIVECHECK" | grep -qi "error\|rate limit\|unable\|not found"; then
+              echo "Warning: livecheck may have failed for $CASK_NAME"
+            fi
 
             # Extract new version: take everything after "==>" and get the first word
             if ! echo "$LIVECHECK" | grep -q "==>"; then
@@ -59,12 +74,13 @@ jobs:
             sed -i.bak "s/version \"$ESCAPED_CURRENT\"/version \"$ESCAPED_NEW\"/" "$CASK"
             rm -f "$CASK.bak"
 
-            # Parse arch line to extract arch names and values separately
-            # Only look at the 'arch' line (not sha256 lines)
+            # Parse arch line(s) to extract arch names and values separately
+            # May span multiple lines when a line ends with ','
             # e.g. arch arm: "arm64", intel: "x64"
             #      arch arm: "arm64"
-            #      arch arm: "-arm64", intel: ""
-            ARCH_LINE=$(grep -E '^[[:space:]]*arch ' "$CASK" | head -1)
+            #      arch arm: "aarch64",
+            #          intel: "x64"
+            ARCH_LINE=$(awk '/^[[:space:]]*arch /{line=$0; while(/,$/){getline; line=line" "$0}; print line; exit}' "$CASK")
             echo "Arch line: $ARCH_LINE"
 
             ARCH_NAMES=()
@@ -132,7 +148,7 @@ jobs:
 
       - name: Create pull request
         if: steps.update.outputs.updated
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: update casks"
