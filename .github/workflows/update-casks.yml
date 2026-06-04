@@ -61,7 +61,7 @@ jobs:
               echo "No update info for $CASK_NAME, skipping"
               continue
             fi
-            NEW_VERSION=$(echo "$LIVECHECK" | grep '==' | sed 's/.*==>[[:space:]]*//' | awk '{print $1}')
+            NEW_VERSION=$(echo "$LIVECHECK" | grep '==' | sed 's/.*==>[[:space:]]*//' | awk '{print $1}' | sed $'s/\e\\[[0-9;]*m//g')
 
             if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$CURRENT_VERSION" ]; then
               echo "No update needed for $CASK_NAME"
