@@ -19,5 +19,10 @@ The app will be automatically configured to run without security warnings.
 ```bash
 # when you add new casks, you need to update the tap first.
 brew update
+
+# in this tap, most of casks are auto_updates enabled
+# so you must use  `--greedy` to check the outdated casks and upgrade them.
+brew outdated --cask --greedy
+brew upgrade --cask --greedy
 ```
 
