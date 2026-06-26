@@ -1,8 +1,8 @@
 cask "github-stars-manager" do
   arch arm: "-arm64", intel: ""
 
-  version "0.6.5"
-  sha256 arm:   "87d39b908f01324d13f1f2c507fcc0e556c4cc952970303fcdb9ffddcc840ce5",
+  version "0.6.7"
+  sha256 arm:   "a4c7756adb5c309642e52fda226baaf06da939731390a9679225a8872615ea3b",
          intel: "c28671376e567ab57241f37a00eed41ddb289533af5affca1a0a8c9f945c6cdb"
 
   url "https://github.com/AmintaCCCP/GithubStarsManager/releases/download/v#{version}/GitHub.Stars.Manager-#{version}#{arch}.dmg"
