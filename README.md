@@ -10,7 +10,10 @@ A Homebrew tap containing custom casks for macOS applications.
 
 ```bash
 brew tap yu-7/unsigned
+brew trust yu-7/unsigned
 ```
+
+Homebrew 6+ requires an explicit `brew trust` for third-party taps before it will load casks.
 
 The app will be automatically configured to run without security warnings.
 

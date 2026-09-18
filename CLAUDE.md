@@ -34,6 +34,7 @@ All casks in this repository follow a consistent pattern:
 ```bash
 # Install the tap locally
 brew tap YU-7/unsigned
+brew trust yu-7/unsigned
 
 # Test a specific cask
 brew install --cask <cask-name>

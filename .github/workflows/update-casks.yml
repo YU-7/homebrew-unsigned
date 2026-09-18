@@ -28,6 +28,7 @@ jobs:
       - name: Setup Homebrew tap
         run: |
           brew tap ${{ github.repository }} "${{ github.workspace }}"
+          brew trust yu-7/unsigned
 
       - name: Run update script
         id: update
@@ -46,14 +47,18 @@ jobs:
 
             # Run brew livecheck against the local tap cask
             LIVECHECK_STDERR=$(mktemp)
-            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>"$LIVECHECK_STDERR" || true)
+            set +e
+            LIVECHECK=$(brew livecheck --cask "$CASK_NAME" 2>"$LIVECHECK_STDERR")
+            LIVECHECK_EXIT=$?
+            set -e
             LIVECHECK_ERR=$(cat "$LIVECHECK_STDERR")
             rm -f "$LIVECHECK_STDERR"
             echo "Livecheck stdout: $LIVECHECK"
             [ -n "$LIVECHECK_ERR" ] && echo "Livecheck stderr: $LIVECHECK_ERR"
 
-            if echo "$LIVECHECK_ERR" | grep -qi "error\|rate limit\|unable\|not found"; then
-              echo "Warning: livecheck may have failed for $CASK_NAME: $LIVECHECK_ERR"
+            if [ "$LIVECHECK_EXIT" -ne 0 ]; then
+              echo "Error: livecheck failed for $CASK_NAME (exit $LIVECHECK_EXIT)"
+              exit 1
             fi
 
             # Extract new version: take everything after "==>" and get the first word
