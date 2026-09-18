@@ -1,8 +1,8 @@
 cask "frpc-desktop" do
   arch arm: "arm64"
 
-  version "1.2.6"
-  sha256 arm:   "7a16a3538a7b9a60df8cfd000608459795410f3c4ef0dae078d5b7dbbcc31054"
+  version "1.2.7"
+  sha256 arm:   "49f77d42b39717e1ae3befd76563755cd9b4a0cfe4afc4964cc2a1ee7c7b2282"
 
   url "https://github.com/luckjiawei/frpc-desktop/releases/download/v#{version}/frpc-desktop-#{version}-#{arch}.dmg"
   name "frpc Desktop"
