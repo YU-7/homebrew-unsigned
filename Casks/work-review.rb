@@ -1,8 +1,8 @@
 cask "work-review" do
   arch arm: "aarch64", intel: "x64"
 
-  version "1.1.2"
-  sha256 arm:   "ae90f177c8faf50033289f424e438e10586f11adaee9689409774e883bab8b83",
+  version "1.1.3"
+  sha256 arm:   "d9cbdcb4c1425ba5981a84fa59e3095fbd7de7fd395dc095e911d8024b47fca0",
          intel: ""
 
   url "https://github.com/wm94i/Work_Review/releases/download/v#{version}/Work_Review_#{version}_#{arch}.dmg"
